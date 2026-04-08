@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: academic_copilot
+      POSTGRES_USER: academic_copilot
+      POSTGRES_PASSWORD: academic_copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      DATABASE_URL: postgresql+psycopg://academic_copilot:academic_copilot@postgres:5432/academic_copilot
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-before-production
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CROSSREF_MAILTO: yourmail@example.com
+      SEMANTIC_SCHOLAR_API_KEY: ""
+      LLM_PROVIDER: heuristic
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+
+  worker:
+    build:
+      context: ./backend
+    command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      DATABASE_URL: postgresql+psycopg://academic_copilot:academic_copilot@postgres:5432/academic_copilot
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-before-production
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      CROSSREF_MAILTO: yourmail@example.com
+      SEMANTIC_SCHOLAR_API_KEY: ""
+      LLM_PROVIDER: heuristic
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    image: node:20
+    working_dir: /frontend
+    command: sh -c "npm install && npm run dev"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/frontend
+
+volumes:
+  postgres_data:
